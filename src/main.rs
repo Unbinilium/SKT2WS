@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use ws_broadcaster::{Config, run};
+use skt2ws::{Config, run};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

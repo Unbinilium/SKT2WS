@@ -56,7 +56,6 @@ pub async fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route(&ws_route, get(websocket_handler))
         .with_state(app_state);
-
     info!(
         "WebSocket service listening on ws://{}{}",
         config.ws_addr, ws_route
@@ -146,11 +145,10 @@ async fn websocket_handler(
 }
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, addr: SocketAddr) {
-    let mut rx = state.tx.subscribe();
     info!("New WebSocket client connected: {}", addr);
 
+    let mut rx = state.tx.subscribe();
     let mut ping_interval = tokio::time::interval(Duration::from_secs(10));
-
     loop {
         tokio::select! {
             _ = ping_interval.tick() => {
@@ -192,5 +190,6 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, addr: Socket
             else => break,
         }
     }
+
     info!("WebSocket client {} disconnected.", addr);
 }

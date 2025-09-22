@@ -1,5 +1,5 @@
 [Skt2Ws]
-    A simple programe that broadcasts messages from a Unix socket to all connected WebSocket clients.
+    A simple program that broadcasts messages from a Unix socket to all connected WebSocket clients.
 
 [Build]
     cargo build --release
