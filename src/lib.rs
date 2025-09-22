@@ -5,10 +5,11 @@ use axum::{
         connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
+    http::header,
     response::IntoResponse,
     routing::get,
 };
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration, str::FromStr};
 use tokio::net::{TcpListener, UnixDatagram};
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
@@ -39,7 +40,6 @@ pub async fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, _) = broadcast::channel::<Message>(config.channel_capacity);
     let app_state = Arc::new(AppState { tx: tx.clone() });
-
     tokio::spawn(datagram_listener(
         config.socket_path,
         tx.clone(),
@@ -138,10 +138,18 @@ async fn datagram_listener(path: PathBuf, tx: broadcast::Sender<Message>, buffer
 
 async fn websocket_handler(
     ws: WebSocketUpgrade,
+    headers: header::HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state, addr))
+    let client_addr = headers
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .and_then(|s| SocketAddr::from_str(s.trim()).ok())
+        .unwrap_or(addr);
+
+    ws.on_upgrade(move |socket| handle_socket(socket, state, client_addr))
 }
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, addr: SocketAddr) {
