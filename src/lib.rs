@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration, str::FromStr};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use tokio::net::{TcpListener, UnixDatagram};
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
@@ -176,9 +176,12 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, addr: Socket
                             break;
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {
-                        warn!("Client {} is lagging behind, disconnecting.", addr);
-                        break;
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        warn!(
+                            "Client {} lagged behind by {} messages; skipping to latest.",
+                            addr, skipped
+                        );
+                        continue;
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         break;
