@@ -126,7 +126,7 @@ async fn datagram_listener(path: PathBuf, tx: broadcast::Sender<Message>, buffer
             );
             if tx.receiver_count() > 0 {
                 if tx
-                    .send(Message::Binary(buf[..len].to_vec().into()))
+                    .send(Message::from(buf[..len]))
                     .is_err()
                 {
                     warn!("Failed to send message to WebSocket clients.");
