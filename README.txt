@@ -1,4 +1,4 @@
-[Skt2Ws]
+[SKT2WS]
     A simple program that broadcasts messages from a Unix socket to all connected WebSocket clients.
 
 [Build]
