@@ -2,41 +2,62 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use clap::Parser;
 use futures_util::StreamExt;
+use serde::Deserialize;
 use tokio::net::UnixDatagram;
 use tokio::sync::Barrier;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-#[derive(Parser, Debug)]
-#[command(author, version, about = "Measure skt2ws throughput and latency", long_about = None)]
+fn default_ws_url() -> String {
+    "ws://127.0.0.1:3000/ws".into()
+}
+fn default_unix_socket() -> PathBuf {
+    PathBuf::from("/dev/shm/skt2ws.sock")
+}
+fn default_receivers() -> usize {
+    4
+}
+fn default_messages() -> u64 {
+    10000
+}
+fn default_payload_size() -> usize {
+    1024
+}
+fn default_interval_us() -> u64 {
+    0
+}
+fn default_receiver_timeout() -> u64 {
+    30
+}
+
+#[derive(Debug, Deserialize)]
 struct Args {
     /// URL of the running skt2ws WebSocket service (e.g. ws://127.0.0.1:3000/ws)
-    #[arg(long, default_value = "ws://127.0.0.1:3000/ws")]
+    #[serde(default = "default_ws_url")]
     ws_url: String,
 
     /// Path to the Unix datagram socket exposed by skt2ws
-    #[arg(long, default_value = "/dev/shm/skt2ws.sock")]
+    #[serde(default = "default_unix_socket")]
     unix_socket: PathBuf,
 
     /// Number of WebSocket receivers to attach
-    #[arg(long, default_value_t = 4)]
+    #[serde(default = "default_receivers")]
     receivers: usize,
 
     /// Number of messages to broadcast through the forwarder
-    #[arg(long, default_value_t = 10000)]
+    #[serde(default = "default_messages")]
     messages: u64,
 
     /// Size of the payload appended after the 16-byte header (in bytes)
-    #[arg(long, default_value_t = 1024)]
+    #[serde(default = "default_payload_size")]
     payload_size: usize,
 
     /// Interval between messages in microseconds (0 = as fast as possible)
-    #[arg(long, default_value_t = 0)]
+    #[serde(default = "default_interval_us")]
     interval_us: u64,
 
     /// Maximum time to wait for each receiver to finish (seconds)
-    #[arg(long, default_value_t = 30)]
+    #[serde(default = "default_receiver_timeout")]
     receiver_timeout: u64,
 }
 
@@ -55,7 +76,13 @@ type DynError = Box<dyn std::error::Error + Send + Sync>;
 
 #[tokio::main]
 async fn main() -> Result<(), DynError> {
-    let args = Args::parse();
+    let cfg_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "benchmark.json".to_string());
+    let data = std::fs::read_to_string(&cfg_path)
+        .map_err(|e| format!("Failed to read config '{}': {}", cfg_path, e))?;
+    let args: Args = serde_json::from_str(&data)
+        .map_err(|e| format!("Failed to parse config '{}': {}", cfg_path, e))?;
     if args.receivers == 0 {
         return Err("Receivers count must be at least 1".into());
     }
@@ -68,7 +95,6 @@ async fn main() -> Result<(), DynError> {
         let ws_url = args.ws_url.clone();
         let barrier = barrier.clone();
         let expected = args.messages;
-        let start_instant = start_instant;
         handles.push(tokio::spawn(async move {
             run_receiver(id, ws_url, expected, barrier, start_instant).await
         }));
@@ -182,10 +208,10 @@ async fn run_receiver(
                 last_receive = Some(since_start);
 
                 let seq = u64::from_le_bytes(data[0..8].try_into().unwrap());
-                if let Some(prev) = prev_sequence {
-                    if seq > prev + 1 {
-                        dropped_sequences += seq - prev - 1;
-                    }
+                if let Some(prev) = prev_sequence
+                    && seq > prev + 1
+                {
+                    dropped_sequences += seq - prev - 1;
                 }
                 prev_sequence = Some(seq);
 

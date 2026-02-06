@@ -1,0 +1,9 @@
+{
+    "ws_unix_socket": "/dev/shm/skt2ws-ws.sock",
+    "ws_unix_socket_mode": "0666",
+    "ws_path": "/",
+    "socket_path": "/dev/shm/skt2ws.sock",
+    "log_level": "info",
+    "buffer_size": 16384,
+    "channel_capacity": 4096
+}
